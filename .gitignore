@@ -1,0 +1,7 @@
+data/
+mlruns/
+mlartifacts/
+results/*.csv
+.venv/
+__pycache__/
+.DS_Store
