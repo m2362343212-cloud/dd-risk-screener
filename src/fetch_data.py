@@ -8,6 +8,14 @@
 import argparse, pathlib, time
 
 import akshare as ak
+import requests
+
+_orig_request = requests.Session.request
+def _request_with_timeout(self, *args, **kwargs):
+    if kwargs.get("timeout") is None:
+        kwargs["timeout"] = 30
+    return _orig_request(self, *args, **kwargs)
+requests.Session.request = _request_with_timeout
 
 OUT = pathlib.Path("data/raw")
 OUT.mkdir(parents=True, exist_ok=True)
