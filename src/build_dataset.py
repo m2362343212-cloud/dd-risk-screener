@@ -149,7 +149,10 @@ def ind_z(s):
     """行业内稳健标准化：(x − 行业中位数) / 行业四分位距。同行少于 10 家就不算。"""
     if s.notna().sum() < 10:
         return s * np.nan
-    return (s - s.median()) / (s.quantile(.75) - s.quantile(.25) + 1e-9)
+    iqr = s.quantile(.75) - s.quantile(.25)
+    if not iqr > 1e-6:                                 # 同行数值几乎一样，四分位距≈0，除出来会爆炸 → 不算
+        return s * np.nan
+    return ((s - s.median()) / iqr).clip(-10, 10)      # 截在 ±10，防止极端值
 
 
 def add_industry_relative(df):
