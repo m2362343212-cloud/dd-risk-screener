@@ -1,11 +1,4 @@
-akshare
-pandas
-pyarrow
-numpy
-scikit-learn
-lightgbm
-torch
-mlflow
-shap
 streamlit
-matplotlib
+pandas
+numpy
+pyarrow

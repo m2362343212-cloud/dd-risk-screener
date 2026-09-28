@@ -64,6 +64,9 @@ def main():
     # 同行业中位数（给页面的对比表用）
     peers = live.groupby("industry")[RAW].median().reset_index()
     peers.to_parquet(out / "peer_medians.parquet", index=False)
+    pathlib.Path("app_data").mkdir(exist_ok=True)              # 同步一份给网页（会上传到 GitHub）
+    live.to_parquet("app_data/scored_fy2025.parquet", index=False)
+    peers.to_parquet("app_data/peer_medians.parquet", index=False)
 
     # README 用的 SHAP 汇总图
     pathlib.Path("results").mkdir(exist_ok=True)

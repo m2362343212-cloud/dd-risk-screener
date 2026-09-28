@@ -117,7 +117,7 @@ A Streamlit page shows, for any company: its risk percentile, the top three red 
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-full.txt
 
 python src/fetch_data.py              # Step 1: download FY2014–2025 (about 1 hour)
 python src/build_dataset.py           # Steps 2–3: label + features

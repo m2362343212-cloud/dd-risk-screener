@@ -34,8 +34,8 @@ LABELS = {"gross_margin": "Gross margin", "roe": "ROE", "op_margin": "Operating 
 
 @st.cache_data
 def load():
-    live = pd.read_parquet("data/processed/scored_fy2025.parquet")
-    peers = pd.read_parquet("data/processed/peer_medians.parquet").set_index("industry")
+    live = pd.read_parquet("app_data/scored_fy2025.parquet")
+    peers = pd.read_parquet("app_data/peer_medians.parquet").set_index("industry")
     return live, peers
 
 
