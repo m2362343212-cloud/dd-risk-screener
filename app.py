@@ -3,6 +3,7 @@
 用法：  streamlit run app.py     （先跑 python src/explain.py 生成打分文件）
 页面用英文，因为是给招聘方 / 面试官看的；注释用中文。
 """
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -72,9 +73,10 @@ if len(hits) > 1:                                               # 多个匹配�
 # ---- 风险分数（百分位）----
 st.header(f"{row['name']} ({row['code']}) — {row['industry']}")
 pct = row[pct_col] * 100
+top_share = max(1, int(np.ceil(100 - pct)))                  # 属于风险最高的前百分之几（至少 1%）
 c1, c2 = st.columns(2)
-c1.metric("Risk percentile", f"{pct:.0f}th")
-c1.write(f"Riskier than **{pct:.0f}%** of {universe}.")
+c1.metric("Risk percentile", f"{min(pct, 99.9):.1f}")
+c1.write(f"Among the riskiest **{top_share}%** of {universe}.")
 c2.metric("Model probability", f"{row['risk_score']:.1%}")
 
 # ---- 三个危险信号 ----
@@ -83,18 +85,22 @@ questions = []
 for j in (1, 2, 3):
     f = base(row[f"flag_{j}"])
     text, question = PLAIN.get(f, (f, None))
+    if pd.isna(row.get(f)):                                   # 这个指标年报里缺失（ROE 缺失常见于净资产为负）
+        text = ("Return on equity is unavailable, often a sign of negative equity" if f == "roe"
+                else f"{LABELS.get(f, f)} is missing from the report")
     rel = " compared with industry peers" if row[f"flag_{j}"].endswith("_ind") else ""
     st.markdown(f"**{j}. {text}{rel}.**")
     if question and question not in questions:
         questions.append(question)
 
-# ---- 同行对比表 ----
+# ---- 同行对比表（百分比显示，缺失显示为 —）----
 st.subheader("Peer comparison")
 if row["industry"] in peers.index:
-    tbl = pd.DataFrame({"This company": [row[f] for f in LABELS],
-                        "Industry median": [peers.loc[row["industry"], f] for f in LABELS]},
+    fmt = lambda v: "—" if pd.isna(v) else f"{v:.1%}"
+    tbl = pd.DataFrame({"This company": [fmt(row[f]) for f in LABELS],
+                        "Industry median": [fmt(peers.loc[row["industry"], f]) for f in LABELS]},
                        index=list(LABELS.values()))
-    st.dataframe(tbl.style.format("{:.2f}"))
+    st.table(tbl)
 
 # ---- 实地调研问题 ----
 st.subheader("Questions for the site visit")
