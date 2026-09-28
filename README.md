@@ -1,10 +1,8 @@
 # Due-Diligence Risk Screener
 
-A first-pass screening tool that flags which listed Chinese companies are likely to **deteriorate financially next year**, and explains why in plain language.
-
-# Due-Diligence Risk Screener
-
 **Live demo:** https://dd-risk-screener.streamlit.app
+
+A first-pass screening tool that flags which listed Chinese companies are likely to **deteriorate financially next year**, and explains why in plain language.
 
 
 ## Motivation
