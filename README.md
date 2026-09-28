@@ -2,6 +2,12 @@
 
 A first-pass screening tool that flags which listed Chinese companies are likely to **deteriorate financially next year**, and explains why in plain language.
 
+# Due-Diligence Risk Screener
+
+**Live demo:** https://dd-risk-screener.streamlit.app
+
+A first-pass screening tool that flags ...
+
 ## Motivation
 
 During an internship at Zhejiang Yongxi Investment Management, I saw specialized companies evaluated through site visits and manual document review, with no structured database behind the first pass. This project tests how much of that first pass machine learning can support: which companies deserve a closer look, and what to ask about when you get there.
