@@ -6,7 +6,6 @@ A first-pass screening tool that flags which listed Chinese companies are likely
 
 **Live demo:** https://dd-risk-screener.streamlit.app
 
-A first-pass screening tool that flags ...
 
 ## Motivation
 
