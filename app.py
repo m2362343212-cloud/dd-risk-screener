@@ -1,11 +1,21 @@
 """
-第 7 步（下）：Streamlit 尽调筛查页面
+Streamlit 尽调筛查页面
 用法：  streamlit run app.py     （先跑 python src/explain.py 生成打分文件）
+
+两个标签页：
+  1. Screen & compare —— 按行业和条件筛选 → 候选名单 → 选几家并排对比 → 每家 3–5 句总结 → 下载
+  2. Company profile  —— 查单家公司：风险百分位、三个危险信号、同行对比、实地调研问题
 页面用英文，因为是给招聘方 / 面试官看的；注释用中文。
 """
+import pathlib, sys
+
 import numpy as np
 import pandas as pd
 import streamlit as st
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
+from screening import (METRICS, add_industry_rank, comparison_table, company_summary,
+                       results_table, screen)
 
 st.set_page_config(page_title="DD Risk Screener", layout="wide")
 
@@ -25,18 +35,15 @@ PLAIN = {
     "exp_ratio_chg": ("Costs are rising faster than sales", "What is driving the rise in selling and admin expenses?"),
     "log_assets":    ("Company is small", "How dependent is the business on a few customers or suppliers?"),
 }
-LABELS = {"gross_margin": "Gross margin", "roe": "ROE", "op_margin": "Operating margin",
-          "rev_growth": "Revenue growth", "profit_growth": "Profit growth", "debt_ratio": "Debt ratio",
-          "cash_ratio": "Cash / assets", "cfo_assets": "Op. cash flow / assets",
-          "accruals": "Accruals / assets", "recv_vs_rev": "Receivables vs revenue growth",
-          "inv_vs_rev": "Inventory vs revenue growth", "exp_ratio_chg": "Change in expense ratio"}
+LABELS = {f: label for f, (label, _) in METRICS.items()}
 
 
 @st.cache_data
 def load():
-    live = pd.read_parquet("app_data/scored_fy2025.parquet")
-    peers = pd.read_parquet("app_data/peer_medians.parquet").set_index("industry")
-    return live, peers
+    folder = "app_data" if pathlib.Path("app_data/scored_fy2025.parquet").exists() else "data/processed"
+    live = pd.read_parquet(f"{folder}/scored_fy2025.parquet")
+    peers = pd.read_parquet(f"{folder}/peer_medians.parquet").set_index("industry")
+    return add_industry_rank(live), peers
 
 
 live, peers = load()
@@ -46,65 +53,131 @@ st.title("Due-Diligence Risk Screener")
 st.caption("Probability that a listed Chinese company's financials deteriorate next year "
            "(profit turns to loss, or revenue falls >20%). Based on FY2025 annual reports.")
 
-# ---- 侧边栏：科创板筛选 ----
-star_only = st.sidebar.checkbox("STAR Market only (688xxx)")
-pool = live[live["is_star"]] if star_only else live
-pct_col = "pct_star" if star_only else "pct_all"
-universe = "STAR Market companies" if star_only else "A-share companies"
+tab_screen, tab_profile = st.tabs(["Screen & compare", "Company profile"])
 
-st.sidebar.markdown("### Riskiest 20")
-st.sidebar.dataframe(pool.nlargest(20, "risk_score")[["code", "name"]], hide_index=True)
+# ==========================================================================================
+# 标签页 1：筛选 → 候选名单 → 对比 → 总结
+# ==========================================================================================
+with tab_screen:
+    st.subheader("1. Set the screen")
+    c1, c2, c3 = st.columns(3)
+    industries = c1.multiselect("Industry (leave empty for all)", sorted(live["industry"].dropna().unique()))
+    objective = c2.radio("Looking for", ["Candidates (lowest risk)", "Watch list (highest risk)"])
+    top_n = c3.slider("Companies to show", 5, 50, 20, step=5)
+    star_only = c3.checkbox("STAR Market only (688xxx)")
 
-# ---- 搜索 ----
-q = st.text_input("Search by stock code or name", placeholder="e.g. 688981 or 中芯")
-if not q:
-    st.info("Type a stock code or company name to see its risk profile.")
-    st.stop()
-hits = pool[pool["code"].str.contains(q) | pool["name"].fillna("").str.contains(q)]
-if hits.empty:
-    st.warning("No match.")
-    st.stop()
-row = hits.iloc[0]
-if len(hits) > 1:                                               # 多个匹配就让用户选
-    code = st.selectbox("Several matches:", hits["code"].tolist(),
-                        format_func=lambda c: f"{c}  {hits.loc[hits['code'] == c, 'name'].iloc[0]}")
-    row = hits[hits["code"] == code].iloc[0]
+    with st.expander("Financial filters (optional)"):
+        st.caption("A filter left at its lowest/highest setting is off. "
+                   "Once a filter is on, companies missing that figure are excluded.")
+        f1, f2, f3, f4 = st.columns(4)
+        max_pct = f1.slider("Max risk percentile", 5, 100, 100, step=5)
+        min_growth = f2.slider("Min revenue growth (%)", -50, 50, -50, step=5)
+        min_roe = f3.slider("Min ROE (%)", -20, 30, -20, step=1)
+        max_debt = f4.slider("Max debt ratio (%)", 10, 100, 100, step=5)
+        pos_cfo = st.checkbox("Positive operating cash flow only")
 
-# ---- 风险分数（百分位）----
-st.header(f"{row['name']} ({row['code']}) — {row['industry']}")
-pct = row[pct_col] * 100
-top_share = max(1, int(np.ceil(100 - pct)))                  # 属于风险最高的前百分之几（至少 1%）
-c1, c2 = st.columns(2)
-c1.metric("Risk percentile", f"{min(pct, 99.9):.1f}")
-c1.write(f"Among the riskiest **{top_share}%** of {universe}.")
-c2.metric("Model probability", f"{row['risk_score']:.1%}")
+    hits = screen(
+        live, industries=industries, star_only=star_only,
+        objective="candidates" if objective.startswith("Candidates") else "watchlist",
+        max_risk_pct=None if max_pct == 100 else max_pct / 100,
+        min_rev_growth=None if min_growth == -50 else min_growth / 100,
+        min_roe=None if min_roe == -20 else min_roe / 100,
+        max_debt_ratio=None if max_debt == 100 else max_debt / 100,
+        positive_cfo=pos_cfo, top_n=top_n)
 
-# ---- 三个危险信号 ----
-st.subheader("Top 3 red flags")
-questions = []
-for j in (1, 2, 3):
-    f = base(row[f"flag_{j}"])
-    text, question = PLAIN.get(f, (f, None))
-    if pd.isna(row.get(f)):                                   # 这个指标年报里缺失（ROE 缺失常见于净资产为负）
-        text = ("Return on equity is unavailable, often a sign of negative equity" if f == "roe"
-                else f"{LABELS.get(f, f)} is missing from the report")
-    rel = " compared with industry peers" if row[f"flag_{j}"].endswith("_ind") else ""
-    st.markdown(f"**{j}. {text}{rel}.**")
-    if question and question not in questions:
-        questions.append(question)
+    st.subheader(f"2. Shortlist ({len(hits)} companies)")
+    if hits.empty:
+        st.warning("No company passes these filters. Loosen one of them.")
+    else:
+        st.dataframe(results_table(hits), hide_index=True, use_container_width=True)
 
-# ---- 同行对比表（百分比显示，缺失显示为 —）----
-st.subheader("Peer comparison")
-if row["industry"] in peers.index:
-    fmt = lambda v: "—" if pd.isna(v) else f"{v:.1%}"
-    tbl = pd.DataFrame({"This company": [fmt(row[f]) for f in LABELS],
-                        "Industry median": [fmt(peers.loc[row["industry"], f]) for f in LABELS]},
-                       index=list(LABELS.values()))
-    st.table(tbl)
+        # ---- 选 2–4 家并排对比 ----
+        st.subheader("3. Compare")
+        label = lambda c: f"{c}  {hits.loc[hits['code'] == c, 'name'].iloc[0]}"
+        picked = st.multiselect("Pick 2 to 4 companies from the shortlist", hits["code"].tolist(),
+                                default=hits["code"].tolist()[:3], format_func=label, max_selections=4)
+        rows = hits[hits["code"].isin(picked)]
+        if len(rows) >= 2:
+            st.table(comparison_table(rows, peers))
+            st.caption("'Best' accounts for direction: lower is better for debt ratio, accruals, "
+                       "receivables, inventory and expense-ratio change.")
+        elif len(rows) == 1:
+            st.info("Pick at least one more company to compare.")
 
-# ---- 实地调研问题 ----
-st.subheader("Questions for the site visit")
-for qn in questions:
-    st.markdown(f"- {qn}")
+        # ---- 每家公司的文字总结 ----
+        if len(rows) >= 1:
+            st.subheader("4. Plain-English summary")
+            summaries = {}
+            for _, r in rows.iterrows():
+                sentences = company_summary(r, peers)
+                summaries[r["code"]] = " ".join(sentences)
+                st.markdown(f"**{r['name']} ({r['code']})**")
+                st.write(" ".join(sentences))
+            st.caption("Summaries are generated from fixed templates, so every sentence traces back "
+                       "to a number in the tables above.")
+
+            # ---- 下载候选名单（带总结），方便发给同事 ----
+            export = results_table(hits)
+            export["Summary"] = export["Code"].map(summaries).fillna("")
+            st.download_button("Download shortlist (CSV)", export.to_csv(index=False).encode("utf-8-sig"),
+                               file_name="shortlist.csv", mime="text/csv")
+
+# ==========================================================================================
+# 标签页 2：单家公司
+# ==========================================================================================
+with tab_profile:
+    q = st.text_input("Search by stock code or name", placeholder="e.g. 688981 or 中芯")
+    hits1 = live[live["code"].str.contains(q) | live["name"].fillna("").str.contains(q)] if q else live.iloc[0:0]
+    if not q:
+        st.info("Type a stock code or company name to see its risk profile.")
+    elif hits1.empty:
+        st.warning("No match.")
+    else:
+        row = hits1.iloc[0]
+        if len(hits1) > 1:                                          # 多个匹配就让用户选
+            code = st.selectbox("Several matches:", hits1["code"].tolist(),
+                                format_func=lambda c: f"{c}  {hits1.loc[hits1['code'] == c, 'name'].iloc[0]}")
+            row = hits1[hits1["code"] == code].iloc[0]
+
+        # ---- 风险分数（百分位）----
+        st.header(f"{row['name']} ({row['code']}) — {row['industry']}")
+        pct = row["pct_all"] * 100
+        top_share = max(1, int(np.ceil(100 - pct)))                 # 属于风险最高的前百分之几（至少 1%）
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Risk percentile", f"{min(pct, 99.9):.1f}")
+        c1.write(f"Among the riskiest **{top_share}%** of A-share companies.")
+        c2.metric("Model probability", f"{row['risk_score']:.1%}")
+        c3.metric("Rank in industry (1 = lowest risk)", f"{int(row['ind_rank'])} of {int(row['ind_n'])}")
+
+        st.subheader("Summary")
+        st.write(" ".join(company_summary(row, peers)))
+
+        # ---- 三个危险信号 ----
+        st.subheader("Top 3 red flags")
+        questions = []
+        for j in (1, 2, 3):
+            f = base(row[f"flag_{j}"])
+            text, question = PLAIN.get(f, (f, None))
+            if pd.isna(row.get(f)):                                 # 这个指标年报里缺失（ROE 缺失常见于净资产为负）
+                text = ("Return on equity is unavailable, often a sign of negative equity" if f == "roe"
+                        else f"{LABELS.get(f, f)} is missing from the report")
+            rel = " compared with industry peers" if row[f"flag_{j}"].endswith("_ind") else ""
+            st.markdown(f"**{j}. {text}{rel}.**")
+            if question and question not in questions:
+                questions.append(question)
+
+        # ---- 同行对比表（百分比显示，缺失显示为 —）----
+        st.subheader("Peer comparison")
+        if row["industry"] in peers.index:
+            fmt = lambda v: "—" if pd.isna(v) else f"{v:.1%}"
+            tbl = pd.DataFrame({"This company": [fmt(row[f]) for f in LABELS],
+                                "Industry median": [fmt(peers.loc[row["industry"], f]) for f in LABELS]},
+                               index=list(LABELS.values()))
+            st.table(tbl)
+
+        # ---- 实地调研问题 ----
+        st.subheader("Questions for the site visit")
+        for qn in questions:
+            st.markdown(f"- {qn}")
 
 st.caption("First-pass screening tool for a personal project. Not investment advice.")
