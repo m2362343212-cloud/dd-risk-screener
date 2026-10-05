@@ -41,7 +41,7 @@ The model was chosen on validation years (FY2021–2022) and scored on the test 
 ## Data
 
 - **Source:** annual reports of all A-share companies, pulled with [AKShare](https://github.com/akfamily/akshare) from Eastmoney's public filings data (earnings summary, balance sheet, income statement, cash-flow statement), FY2014–FY2025.
-- Pulling by report date keeps companies that were later delisted, which avoids survivorship bias.
+- **Survivorship bias:** the source returns almost only companies that are still listed. Of 5,112 companies in the database, 5,103 have an FY2025 report and only 9 stop earlier, far fewer than the number of A-share delistings over the period (see Limitations).
 - Banks, brokers and insurers are excluded (their statements have a different structure). Beijing Stock Exchange companies are excluded.
 - **Result:** 51,732 labelled company-years (about 4,500–5,100 companies per year), plus 5,103 FY2025 companies scored "live".
 
@@ -184,7 +184,8 @@ The screening, comparison and summary logic lives in `src/screening.py`, separat
 - Listed companies stand in for the private targets a fund would actually evaluate.
 - Annual data only. Quarterly reports could give earlier warnings.
 - Eastmoney may serve restated figures, which can be cleaner than what investors saw at the time.
-- A company with no report in year *t+1* (for example, one that was delisted) has no label and is dropped, so deterioration is slightly under-counted.
+- **Survivorship bias.** I first assumed that pulling by report date would keep delisted companies. A query on the database showed it does not: only 9 of 5,112 companies have a last report before FY2025. The worst outcomes (companies that failed and were delisted) are therefore missing, so the deterioration rate is under-counted and the model has not been tested on them. The reported precision applies to companies that survived to 2025.
+- A company with no report in year *t+1* has no label and is dropped (111 company-years).
 - Much of the signal is persistence: weak companies tend to stay weak. The subtler red flags (accruals, receivables, inventory) add to this but do not dominate it.
 - AKShare column names can change between versions.
 - The app reads the scored files directly; the SQLite database is a separate query layer and is not yet wired into the interface.
