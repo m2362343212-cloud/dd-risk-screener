@@ -44,6 +44,14 @@ STRENGTH = {
     "accruals": "cash-backed earnings", "recv_vs_rev": "receivables discipline",
     "inv_vs_rev": "inventory discipline", "exp_ratio_chg": "cost control",
 }
+# 中性说法：只是点名这个指标，不带好坏判断（用在"模型在意、但数字并不差"的那句话里）
+NEUTRAL = {
+    "gross_margin": "gross margin", "roe": "return on equity", "op_margin": "operating margin",
+    "rev_growth": "revenue growth", "profit_growth": "profit growth", "debt_ratio": "leverage",
+    "cash_ratio": "cash buffer", "cfo_assets": "operating cash flow", "accruals": "accruals",
+    "recv_vs_rev": "receivables growth", "inv_vs_rev": "inventory growth",
+    "exp_ratio_chg": "expense ratio", "log_assets": "company size",
+}
 
 
 def pct(v):
@@ -221,9 +229,15 @@ def company_summary(row, peers):
         verb = "concern is" if len(parts) == 1 else "concerns are"
         s.append(f"The model's main {verb} " + " and ".join(parts) + ".")
     elif other:
-        names = " and ".join(METRICS[f][0].lower() if f in METRICS else "size" for f in other[:2])
-        s.append(f"Its top risk drivers ({names}) are not worse than the industry median, so the risk "
-                 "comes from the overall combination rather than one weak figure.")
+        names = " and ".join(NEUTRAL.get(f, f) for f in other[:2])
+        one = len(other[:2]) == 1                         # 只有一个就用单数
+        if p < 1 / 3:                                     # 低风险公司：不说"风险来自……"，直接说没有明显短板
+            s.append(f"The model finds no material weakness: its largest risk {'driver' if one else 'drivers'} "
+                     f"({names}) {'is' if one else 'are'} in line with or better than the industry median.")
+        else:
+            s.append(f"Its top risk {'driver' if one else 'drivers'} ({names}) {'is' if one else 'are'} not worse "
+                     "than the industry median, so the risk comes from the overall combination rather than "
+                     "one weak figure.")
     else:
         s.append("No single feature pushes its risk materially above average.")
 

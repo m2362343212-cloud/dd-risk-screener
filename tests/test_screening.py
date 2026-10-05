@@ -123,7 +123,11 @@ def test_summary_does_not_contradict_itself():
     # D 的负债率 55% 低于钢铁行业中位数 62.5%：模型标了它，但总结不能说成 "high leverage (55% vs 62.5%)"
     s = company_summary(df[df.name == "D"].iloc[0], peers)
     assert "high leverage" not in " ".join(s)
-    assert "not worse than the industry median" in s[2]
+    assert "Its top risk driver (leverage) is not worse than the industry median" in s[2]
+    # 同样的情况放在低风险公司身上，不说"风险来自……"，直接说没有明显短板
+    safe = df[df.name == "D"].iloc[0].copy()
+    safe["pct_all"] = 0.1
+    assert "no material weakness: its largest risk driver (leverage) is in line" in company_summary(safe, peers)[2]
 
 
 def test_summary_mentions_missing_data():
