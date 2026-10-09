@@ -116,7 +116,7 @@ Sanity check: the model was never shown the exchange's ST (special treatment) fl
 
 ## Database layer (SQL)
 
-The cleaned company-year table is loaded into a relational database so it can be queried without re-running the pipeline:
+The cleaned company-year table is loaded into a relational database. The Streamlit app queries it directly (see Screening app), and the same queries can be run from the command line:
 
 **Python (ingest, clean, engineer features) → SQLite (structured storage and querying) → model and analytics → Streamlit interface**
 
@@ -159,7 +159,7 @@ WHERE f.code = ?
 WINDOW w AS (PARTITION BY f.code ORDER BY f.fiscal_year);
 ```
 
-All queries pass values as parameters rather than building SQL strings. `tests/test_db.py` checks every query against a four-company in-memory database whose answers can be worked out by hand (10 tests).
+All queries pass values as parameters rather than building SQL strings, and the app opens the database read-only (mode=ro), so nothing typed into the page can change it. tests/test_db.py checks every query against a four-company in-memory database whose answers can be worked out by hand, and checks that the read-only connection rejects writes (11 tests).
 
 ## Screening app
 
@@ -175,6 +175,8 @@ A predictive score alone is not something an investor can act on, so the app is 
 
 A second tab shows the full profile of any single company: risk percentile, rank within its industry, the top three red flags, a peer table, and **questions for the site visit** generated from the flags (for example, receivables flag → "Ask about customer payment terms and overdue receivables").
 
+Two views are served straight from SQLite. The company profile includes a financial history table and chart, built with a LAG() window function that shows each year’s change in operating margin and debt ratio (left blank when the previous year is missing). A third tab, Industry ranking, lists the lowest-risk companies within any industry using RANK() OVER (PARTITION BY industry ORDER BY risk).
+
 The screening, comparison and summary logic lives in `src/screening.py`, separate from the interface, and is covered by `tests/test_screening.py` (12 tests on a hand-checkable toy dataset).
 
 ![Screener](docs/app_screenshot.png)
@@ -188,7 +190,7 @@ The screening, comparison and summary logic lives in `src/screening.py`, separat
 - A company with no report in year *t+1* has no label and is dropped (111 company-years).
 - Much of the signal is persistence: weak companies tend to stay weak. The subtler red flags (accruals, receivables, inventory) add to this but do not dominate it.
 - AKShare column names can change between versions.
-- The app reads the scored files directly; the SQLite database is a separate query layer and is not yet wired into the interface.
+- The deployed database (app_data/screener.db) is a snapshot. After re-running the pipeline it has to be rebuilt with python src/db.py build and copied into app_data/, or it will drift from the scored files.
 - The label thresholds (profit turning to loss, revenue −20%) are my choice. They were fixed before looking at the results.
 
 ## How to run
@@ -214,7 +216,7 @@ Tests (no data needed; both use small hand-checkable datasets):
 
 ```bash
 python tests/test_screening.py        # screening, comparison and summary logic (12 tests)
-python tests/test_db.py               # database schema and SQL queries (10 tests)
+python tests/test_db.py               # database schema, SQL queries and read-only access (11 tests)
 ```
 
 *Personal project. Not investment advice.*
