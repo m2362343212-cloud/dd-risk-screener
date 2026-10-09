@@ -2,7 +2,7 @@
 SQL 数据库层的测试：用内存数据库 + 4 家编出来的公司，答案可以手算。
 运行：  python tests/test_db.py      或      pytest tests/
 """
-import pathlib, sqlite3, sys
+import pathlib, sqlite3, sys, tempfile
 
 import numpy as np
 import pandas as pd
@@ -115,6 +115,22 @@ def test_queries_are_parameterized():
     assert db.screen(conn, 2025, industry="x'; DROP TABLE companies; --").empty
     assert conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 4
 
+def test_read_only_connection_rejects_writes():
+    # app 用 mode=ro 打开数据库：网页上的任何操作都不应该能写入
+    with tempfile.TemporaryDirectory() as d:
+        path = pathlib.Path(d) / "t.db"
+        rw = sqlite3.connect(path)
+        rw.execute("CREATE TABLE x (a INT)")
+        rw.commit()
+        rw.close()
+        ro = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            ro.execute("INSERT INTO x VALUES (1)")
+            assert False, "read-only connection should not allow writes"
+        except sqlite3.OperationalError:
+            pass
+        finally:
+            ro.close()
 
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]

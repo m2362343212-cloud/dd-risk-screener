@@ -7,7 +7,7 @@ Streamlit 尽调筛查页面
   2. Company profile  —— 查单家公司：风险百分位、三个危险信号、同行对比、实地调研问题
 页面用英文，因为是给招聘方 / 面试官看的；注释用中文。
 """
-import pathlib, sys
+import pathlib, sqlite3, sys
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,8 @@ import streamlit as st
 sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
 from screening import (METRICS, add_industry_rank, comparison_table, company_summary,
                        results_table, screen)
+from db import company_history, rank_in_industry
+
 
 st.set_page_config(page_title="DD Risk Screener", layout="wide")
 
@@ -45,6 +47,12 @@ def load():
     peers = pd.read_parquet(f"{folder}/peer_medians.parquet").set_index("industry")
     return add_industry_rank(live), peers
 
+@st.cache_resource
+def get_conn():
+    """一个共用的只读连接。mode=ro：网页上的任何操作都不能改动数据库。"""
+    folder = "app_data" if pathlib.Path("app_data/screener.db").exists() else "data"
+    return sqlite3.connect(f"file:{folder}/screener.db?mode=ro", uri=True, check_same_thread=False)
+
 
 live, peers = load()
 base = lambda f: f.removesuffix("_ind")                         # accruals_ind → accruals
@@ -53,7 +61,7 @@ st.title("Due-Diligence Risk Screener")
 st.caption("Probability that a listed Chinese company's financials deteriorate next year "
            "(profit turns to loss, or revenue falls >20%). Based on FY2025 annual reports.")
 
-tab_screen, tab_profile = st.tabs(["Screen & compare", "Company profile"])
+tab_screen, tab_profile, tab_rank = st.tabs(["Screen & compare", "Company profile", "Industry ranking"])
 
 # ==========================================================================================
 # 标签页 1：筛选 → 候选名单 → 对比 → 总结
@@ -175,9 +183,40 @@ with tab_profile:
                                index=list(LABELS.values()))
             st.table(tbl)
 
+        st.subheader("Financial history")
+        hist = company_history(get_conn(), row["code"])
+        if hist.empty:
+            st.info("No history in the database for this company.")
+        else:
+            cols = {"fiscal_year": "Year", "rev_growth": "Revenue growth", "op_margin": "Operating margin",
+                    "op_margin_change": "Margin change vs prior year", "debt_ratio": "Debt ratio",
+                    "debt_ratio_change": "Debt ratio change"}
+            show = hist[list(cols)].rename(columns=cols)
+            st.dataframe(show.style.format({c: "{:.1%}" for c in list(cols.values())[1:]}, na_rep="—"),
+                         hide_index=True, use_container_width=True)
+            st.line_chart(hist.set_index("fiscal_year")[["op_margin", "debt_ratio"]])
+            st.caption("Queried from SQLite. A change is blank when the previous year is missing.")
+
         # ---- 实地调研问题 ----
         st.subheader("Questions for the site visit")
         for qn in questions:
             st.markdown(f"- {qn}")
+# ==========================================================================================
+# 标签页 3：行业内排名（SQL 窗口函数 RANK）
+# ==========================================================================================
+with tab_rank:
+    c1, c2 = st.columns(2)
+    industry = c1.selectbox("Industry", sorted(live["industry"].dropna().unique()))
+    top = c2.slider("Lowest-risk companies to show", 5, 30, 10, step=5)
+    ranked = rank_in_industry(get_conn(), industry, top)
+    if ranked.empty:
+        st.info("No scored companies in this industry.")
+    else:
+        st.dataframe(ranked.rename(columns={"code": "Code", "name": "Name", "risk_score": "Model probability",
+                                            "rank_in_industry": "Rank", "industry_size": "Companies in industry"})
+                           .drop(columns="industry")
+                           .style.format({"Model probability": "{:.1%}"}),
+                     hide_index=True, use_container_width=True)
+        st.caption("Ranked inside the database with RANK() OVER (PARTITION BY industry ORDER BY risk).")
 
 st.caption("First-pass screening tool for a personal project. Not investment advice.")
