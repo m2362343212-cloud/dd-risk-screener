@@ -193,6 +193,14 @@ The screening, comparison and summary logic lives in `src/screening.py`, separat
 - The deployed database (app_data/screener.db) is a snapshot. After re-running the pipeline it has to be rebuilt with python src/db.py build and copied into app_data/, or it will drift from the scored files.
 - The label thresholds (profit turning to loss, revenue −20%) are my choice. They were fixed before looking at the results.
 
+## Does the risk score predict stock returns?
+
+Predicting that a company will deteriorate is not the same as predicting its stock will fall: the market may already know. [`alpha/`](alpha/README.md) tests this on ~4,200 A-shares a month from May 2018 to Sep 2026, with the model retrained every year on past data only.
+
+- **Overall, no.** Avoiding the riskiest 10% did not improve a portfolio (-0.02% a month, t = -0.86), and the score adds nothing once size, value and momentum are controlled for.
+- **Raw sorts mislead.** Risky firms are small, and small A-shares earned a premium, so unadjusted the riskiest stocks look like winners. Controlling for size flips the sign.
+- **The effect splits by size.** Among mid- and large-cap stocks riskier firms did underperform (largest third: IC t = -2.9); among small caps it reversed, cancelling out overall.
+
 ## How to run
 
 ```bash

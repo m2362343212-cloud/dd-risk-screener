@@ -1,6 +1,6 @@
 # Screener risk score -> A-share returns
 
-- Data: REAL (walk-forward screener scores + AKShare/Eastmoney monthly prices)
+- Data: REAL (walk-forward screener scores + Sina monthly prices via AKShare)
 - Scores: `alpha/output/scores_walkforward_default.csv` (FY Y score usable from 1 May of Y+1)
 - Sample: 2018-05 to 2026-09 formation months (101), 5,051 stocks, avg 4,168 stocks/month
 - Filters: >= 6 months since listing; traded in the formation month; next month's price available
@@ -84,7 +84,7 @@ SCREEN_GAIN = (all stocks minus the riskiest 10%) - (all stocks). LS_Q1_Q5 is th
 |                2025 |  0.3618 |  0.3032 |        0.0052 |     0.0194 |
 |                2026 | -0.1580 | -0.1687 |        0.0011 |     0.0348 |
 
-## 7. Placebo (score shuffled across stocks within each month)
+## 7. Placebo (scores shuffled across stocks once per year; compares IC t-stats)
 Real IC t-stat -0.44 (mean IC -0.0044) vs shuffled t-stats -0.01 +/- 1.05; share at least as extreme: 0.715 (200 shuffles).
 
 ![summary](summary.png)
@@ -92,5 +92,5 @@ Real IC t-stat -0.44 (mean IC -0.0044) vs shuffled t-stats -0.01 +/- 1.05; share
 ## Caveats
 - Survivorship: the financial data contain almost only firms still listed today, so firms that were delisted (the most distressed) are missing.
 - Financial statement values come from Eastmoney's current database; their announcement dates are mostly later than the original annual report, so some values may be restated versions, not exactly what investors saw in April.
-- Float market cap is estimated as monthly amount / turnover; book-to-market uses total equity / float cap.
+- Float market cap = month-end close x outstanding shares (Sina); book-to-market uses total equity / float cap.
 - No ST flags or price-limit handling; LightGBM hyper-parameters were tuned on FY2021-22 (re-run with default params to check).

@@ -93,7 +93,7 @@ def main():
     plt.savefig(out / "summary.png", dpi=130)
 
     src = (f"SYNTHETIC (planted effect {args.effect}/month)" if args.synthetic
-           else "REAL (walk-forward screener scores + AKShare/Eastmoney monthly prices)")
+           else "REAL (walk-forward screener scores + Sina monthly prices via AKShare)")
     lines = [
         "# Screener risk score -> A-share returns", "",
         f"- Data: {src}",
@@ -116,7 +116,7 @@ def main():
         "## 5. Size", fmt(size_tab), "",
         "### Fama-MacBeth without the smallest 30% of stocks", fmt(fm_big), "",
         "## 6. Year by year (compounded, EW; years run June-May)", fmt(yr), "",
-        "## 7. Placebo (score shuffled across stocks within each month)",
+        "## 7. Placebo (scores shuffled across stocks once per year; compares IC t-stats)",
         f"Real IC t-stat {plc['real_IC_t']:.2f} (mean IC {plc['real_mean_IC']:.4f}) vs shuffled t-stats "
         f"{plc['placebo_mean']:.2f} +/- {plc['placebo_std']:.2f}; share at least as extreme: {plc['two_sided_p']:.3f} "
         f"({plc['n_iter']} shuffles).", "",
@@ -127,7 +127,7 @@ def main():
         "- Financial statement values come from Eastmoney's current database; their "
         "announcement dates are mostly later than the original annual report, so some "
         "values may be restated versions, not exactly what investors saw in April.",
-        "- Float market cap is estimated as monthly amount / turnover; book-to-market uses "
+        "- Float market cap = month-end close x outstanding shares (Sina); book-to-market uses "
         "total equity / float cap.",
         "- No ST flags or price-limit handling; LightGBM hyper-parameters were tuned on "
         "FY2021-22 (re-run with default params to check).",
