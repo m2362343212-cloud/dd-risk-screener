@@ -1,0 +1,11 @@
+akshare
+lightgbm
+scikit-learn
+pandas
+numpy
+pyarrow
+scipy
+statsmodels
+matplotlib
+tabulate
+pytest
