@@ -54,9 +54,30 @@ python -m pytest -q alpha/test_alpha.py              # pipeline checks on simula
 python alpha/fetch_prices_sina.py --check            # one stock
 python alpha/fetch_prices_sina.py --part 1/2         # all stocks, split over two terminals
 python alpha/fetch_prices_sina.py --part 2/2         #   (resumable, ~10 h; Eastmoney version: fetch_prices.py)
+python alpha/robustness.py                           # -> alpha/output/robustness/robustness.md (see below)
 python alpha/run.py                                  # -> alpha/output/report.md + summary.png
 python alpha/run.py --scores alpha/output/scores_walkforward_default.csv --out alpha/output_default
 ```
+
+## Robustness checks (`robustness.py`)
+
+The main result is "no effect". The honest question is whether that depends on how the test was run, so `robustness.py` repeats it with one change at a time and reports IC, Fama-MacBeth and the long-only screen for each:
+
+| Variant | Why |
+|---|---|
+| Winsorized returns | A-share returns have extreme outliers; clip next-month returns at the 1st/99th percentile |
+| Liquid 80% | Drop the 20% least-traded stocks each month, a rough stand-in for "could you have traded it" |
+| Signal +1 month | Use the score one month later, in case the 1 May timing is too optimistic |
+| First / second half | One sample period is a limitation; do the halves agree? |
+| Transaction costs | Net gain of the long-only screen at 0 / 20 / 40 / 80 bps **round-trip** (assumptions, not measured costs) |
+
+**Result (real data, May 2018 - Sep 2026, 101 months).** The "no effect" conclusion does not change in any variant. The baseline reproduces the main result (IC t = -0.52; Fama-MacBeth -0.25%/month, t = -0.83). No t-statistic in any variant exceeds 1.5 in absolute value (largest: IC t = -1.40 in the liquid-80% sample). Costs do not rescue the screen: it already loses about 0.02%/month before costs, and an 80 bps round-trip cost makes that -0.022%/month (t = -1.13). The cost table starts one month after the variants table because the first month builds the portfolio rather than rebalancing it. The signs are negative throughout, consistent with the mid- and large-cap pattern above, but never significant.
+
+**What this does not show.** "Not significant" is not "zero". The baseline Fama-MacBeth standard error is about 0.30%/month (0.25 / 0.83), so with 101 months of data an effect within roughly +/-0.6%/month cannot be ruled out.
+
+Pipeline checks on simulated prices: a planted effect is still found in every variant, and with no effect the size trap does not leak through (all variants within |t| < 2.5; see `test_alpha.py`).
+
+**Not covered.** ST flags and price-limit handling: prices are month-end bars, so a limit hit on the formation day cannot be seen, and historical ST status is not in the data. Using today's ST list would leak the future.
 
 ## Pipeline checks (simulated prices, not results)
 

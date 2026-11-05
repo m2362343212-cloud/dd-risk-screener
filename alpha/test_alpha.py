@@ -29,6 +29,34 @@ def test_size_trap_raw_sort_fooled_but_fama_macbeth_not():
     assert abs(t_fm) < 2      # with size control: nothing
 
 
+def test_turnover_hand_cases():
+    import robustness as R
+    assert R.one_way_turnover({1, 2, 3, 4}, {1, 2, 3, 5}) == 0.25    # one of four swapped: 0.5 * (0.25 + 0.25)
+    assert R.one_way_turnover({1, 2, 3, 4}, {1, 2, 3, 4}) == 0
+    assert R.one_way_turnover({1, 2}, {3, 4}) == 1
+    assert R.one_way_turnover({1, 2, 3, 4}, {1, 2}) == 0.5           # weights go 0.25 -> 0.5 on two names, two names sold
+    assert pd.isna(R.one_way_turnover(set(), {1, 2}))                # first month builds the portfolio, not a rebalance
+
+
+def _robustness(effect):
+    import robustness as R
+    sc = pd.read_csv(SCORES, dtype={"code": str})
+    px, be = make_prices(sc, effect=effect)
+    return R.run_all(E.build_panel(sc, px, be))
+
+
+def test_robustness_keeps_planted_effect_in_every_variant():
+    variants, costs = _robustness(0.004)
+    assert (variants["FM_t"] < -3).all()                              # a real effect survives every variant
+    net = costs["net_screen_gain_%_per_month"]
+    assert net.is_monotonic_decreasing                                # more cost, never more gain
+
+
+def test_robustness_finds_nothing_when_there_is_nothing():
+    variants, _ = _robustness(0.0)
+    assert (variants["FM_t"].abs() < 2.5).all()                       # size trap does not leak through
+
+
 def test_no_lookahead():
     sc = pd.read_csv(SCORES, dtype={"code": str})
     px, be = make_prices(sc, effect=0)
